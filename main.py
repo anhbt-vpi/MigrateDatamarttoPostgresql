@@ -10,7 +10,7 @@ def migrateDB():
     driver = '{ODBC Driver 18 for SQL Server}'
     params = 'Driver=' + driver + ';Server=' + server + ',1433;Database=' + database + ';Uid={' + username + '};Pwd={' + password + '};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;Authentication=ActiveDirectoryPassword'
 
-
+    # Set your local database here
     db_name = 'test'
     db_user = 'postgres'
     db_password = 'mac0901'
