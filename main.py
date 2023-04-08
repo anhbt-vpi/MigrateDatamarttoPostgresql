@@ -58,7 +58,7 @@ def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql
             conn_datamart.execute(select_query).fetchall()]
 
     # Đặt kích thước lô
-    batch_size = 500
+    batch_size = 1
 
     # Lặp lại cho đến khi không còn dữ liệu để ghi
 
