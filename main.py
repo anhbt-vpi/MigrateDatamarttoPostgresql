@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Table, MetaData, text, Column, Integer, String
+from sqlalchemy import create_engine, Table, MetaData, text, Column, Integer, Boolean, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -49,10 +49,18 @@ def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql
     table_from_another_database = Table(tablename, metadata, autoload_with=engine_datamart)
 
     # Tạo bảng tương tự trong engine_postgresql
+    new_columns = [
+        Column(c.name, Boolean, nullable=c.nullable, server_default=text('false')) if 'BIT' in str(c.type)
+        else Column(c.name, String if 'NVARCHAR' in str(c.type) else c.type, nullable=c.nullable) for c in
+        table_from_another_database.columns
+    ]
 
+    # Định nghĩa bảng với các cột mới đã thay đổi kiểu dữ liệu
     table_in_postgresql = Table(tablename, metadata,
-                                *[Column(c.name,  String if 'NVARCHAR' in str(c.type) else c.type, nullable=c.nullable) for c in
-                                  table_from_another_database.columns], extend_existing=True)
+                                *new_columns, extend_existing=True)
+    # table_in_postgresql = Table(tablename, metadata,
+    #                             *[Column(c.name,  String if 'NVARCHAR' in str(c.type) else c.type, nullable=c.nullable) for c in
+    #                               table_from_another_database.columns], extend_existing=True)
 
     metadata.create_all(engine_postgresql)
 
