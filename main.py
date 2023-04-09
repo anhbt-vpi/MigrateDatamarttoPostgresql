@@ -2,6 +2,9 @@ from sqlalchemy import create_engine, Table, MetaData, text, Column, Integer, St
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 def migrateDB():
 
     server = 'xznozrobo3funm76yoyaoh75wm-fr3e3p3dk6eejffi7w4p27iybe.datamart.pbidedicated.windows.net'
@@ -32,7 +35,7 @@ def migrateDB():
     drop = ["relationshipColumns", "relationships", "database_firewall_rules"]
     list_table = [elem for elem in table_names if elem not in drop]
     #Lặp qua các table và ghi dữ liệu vao db postgres
-    with engine_datamart.connect().execution_options(timeout=600) as conn_datamart, engine_postgresql.connect().execution_options(timeout=600) as conn_postgresql:
+    with engine_datamart.connect().execution_options(timeout=6000) as conn_datamart, engine_postgresql.connect().execution_options(timeout=6000) as conn_postgresql:
         for tableName in list_table:
             writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql , tableName)
         conn_postgresql.close()
@@ -41,6 +44,7 @@ def migrateDB():
 
 def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql, tablename):
     print(tablename)
+    logging.debug(tablename)
     metadata = MetaData()
     table_from_another_database = Table(tablename, metadata, autoload_with=engine_datamart)
 
@@ -61,13 +65,22 @@ def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql
     batch_size = 1
 
     # Lặp lại cho đến khi không còn dữ liệu để ghi
-
     while data:
         batch = data[:batch_size]
         data = data[batch_size:]
-        insert_query = postgresql_insert(table_in_postgresql).values(batch).on_conflict_do_nothing()
-        conn_postgresql.execute(insert_query, batch)
-        conn_postgresql.commit()
+
+        # Mở transaction mới
+        with conn_postgresql.begin() as trans:
+            try:
+                insert_query = postgresql_insert(table_in_postgresql).values(batch).on_conflict_do_nothing()
+                conn_postgresql.execute(insert_query, batch)
+                # Commit transaction
+                trans.commit()
+            except Exception as e:
+                # Nếu có lỗi, rollback transaction
+                trans.rollback()
+                logging.error(f"Lỗi trong quá trình ghi dữ liệu: {e}")
+
 
 if __name__ == '__main__':
     migrateDB()
