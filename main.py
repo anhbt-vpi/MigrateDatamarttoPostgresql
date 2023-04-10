@@ -3,8 +3,17 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 import logging
+from retrying import retry
 
+# Hàm decorator để thực hiện retry logic cho việc kết nối đến engine
+@retry(wait_exponential_multiplier=1000, wait_exponential_max=10000, stop_max_attempt_number=3)
+def create_sqlalchemy_engine(connection_string):
+    return create_engine(connection_string)
+
+# Cấu hình logging message
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Function chính
 def migrateDB():
 
     server = 'xznozrobo3funm76yoyaoh75wm-fr3e3p3dk6eejffi7w4p27iybe.datamart.pbidedicated.windows.net'
@@ -21,12 +30,13 @@ def migrateDB():
     db_port = 5432
 
     # Tạo engine để kết nối đến cơ sở dữ liệu cổng sql datamart
-    engine_datamart = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
+    engine_datamart = create_sqlalchemy_engine(f"mssql+pyodbc:///?odbc_connect={params}")
     # Tạo engine để kết nối đến cơ sở dữ liệu postgresql trên local
-    engine_postgresql = create_engine(f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}')
+    engine_postgresql = create_sqlalchemy_engine(f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}')
 
     Session = sessionmaker(autocommit=False, autoflush=False, bind=engine_datamart)
     db = Session()
+
     #Lấy các table trong db datamart
     str_sql = text("SELECT table_name FROM information_schema.tables")
     result_query = db.execute(str_sql)
@@ -34,6 +44,10 @@ def migrateDB():
     table_names = [row[0] for row in results]
     drop = ["relationshipColumns", "relationships", "database_firewall_rules"]
     list_table = [elem for elem in table_names if elem not in drop]
+
+    # Đóng session sau khi hoàn thành truy vấn
+    db.close()
+
     #Lặp qua các table và ghi dữ liệu vao db postgres
     with engine_datamart.connect().execution_options(timeout=6000) as conn_datamart, engine_postgresql.connect().execution_options(timeout=6000) as conn_postgresql:
         for tableName in list_table:
@@ -41,7 +55,7 @@ def migrateDB():
         conn_postgresql.close()
         conn_datamart.close()
 
-
+# Function ghi dữ liệu vào DB
 def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql, tablename):
     print(tablename)
     logging.debug(tablename)

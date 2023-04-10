@@ -32,6 +32,8 @@ RUN apt-get update && \
 RUN pip install psycopg2-binary
 RUN pip install pyodbc
 RUN pip install sqlalchemy
+RUN pip install retrying
+
 # Set the working directory to /app
 WORKDIR /app
 
