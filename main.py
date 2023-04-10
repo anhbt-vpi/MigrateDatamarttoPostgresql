@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Table, MetaData, text, Column, Integer, Boolean, String
+from sqlalchemy import create_engine, Table, MetaData, text, Column, select, func, Integer, Boolean, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -16,8 +16,8 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 # Function chính
 def migrateDB():
 
-    server = 'xznozrobo3funm76yoyaoh75wm-fr3e3p3dk6eejffi7w4p27iybe.datamart.pbidedicated.windows.net'
-    database = '2023_LPG_Datamart_Hanhdh'
+    server = 'xznozrobo3funm76yoyaoh75wm-bskk54c73wdejgsv4xf2kugg5i.datamart.pbidedicated.windows.net'
+    database = 'Global_Hydrogen_Data'
     username = 'api@oilgas.ai'
     password = 'Vpi167YmWwnLEgac'
     driver = '{ODBC Driver 18 for SQL Server}'
@@ -45,18 +45,20 @@ def migrateDB():
     drop = ["relationshipColumns", "relationships", "database_firewall_rules"]
     list_table = [elem for elem in table_names if elem not in drop]
 
-    # Đóng session sau khi hoàn thành truy vấn
-    db.close()
+
 
     #Lặp qua các table và ghi dữ liệu vao db postgres
     with engine_datamart.connect().execution_options(timeout=6000) as conn_datamart, engine_postgresql.connect().execution_options(timeout=6000) as conn_postgresql:
         for tableName in list_table:
-            writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql , tableName)
+            writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql , tableName, db)
         conn_postgresql.close()
         conn_datamart.close()
 
+    # Đóng session sau khi hoàn thành truy vấn
+    db.close()
+
 # Function ghi dữ liệu vào DB
-def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql, tablename):
+def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql, tablename, db):
     print(tablename)
     logging.debug(tablename)
     metadata = MetaData()
@@ -78,30 +80,38 @@ def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql
 
     metadata.create_all(engine_postgresql)
 
-    select_query = table_from_another_database.select()
-    data = [dict(zip(table_from_another_database.columns.keys(),
-                     [str(val) if isinstance(val, bytes) else val for val in row])) for row in
-            conn_datamart.execute(select_query).fetchall()]
+    # Tạo alias cho bảng
+    total_records = db.query(table_from_another_database).count()
+    # Thiết lập điều kiện ban đầu cho vòng lặp
+    start = 0
+    # Đặt số lượng mỗi lần ghi, đọc
+    batch_size = 500
+    # Lặp qua các bản ghi và giảm đi 500 mỗi vòng
+    while start < total_records:
+        # Thực hiện truy vấn dữ liệu
+        columns = table_from_another_database.columns
+        first_column_name = columns[0].name
+        select_query = table_from_another_database.select().order_by(first_column_name).offset(start).limit(batch_size)
+        data = [dict(zip(table_from_another_database.columns.keys(),
+                         [str(val) if isinstance(val, bytes) else val for val in row])) for row in
+                conn_datamart.execute(select_query).fetchall()]
 
-    # Đặt kích thước lô
-    batch_size = 1
 
-    # Lặp lại cho đến khi không còn dữ liệu để ghi
-    while data:
-        batch = data[:batch_size]
-        data = data[batch_size:]
-
-        # Mở transaction mới
         with conn_postgresql.begin() as trans:
             try:
-                insert_query = postgresql_insert(table_in_postgresql).values(batch).on_conflict_do_nothing()
-                conn_postgresql.execute(insert_query, batch)
+                insert_query = postgresql_insert(table_in_postgresql).values(data).on_conflict_do_nothing()
+                conn_postgresql.execute(insert_query, data)
                 # Commit transaction
                 trans.commit()
             except Exception as e:
                 # Nếu có lỗi, rollback transaction
                 trans.rollback()
                 logging.error(f"Lỗi trong quá trình ghi dữ liệu: {e}")
+        # Giảm đi 500 để chuẩn bị cho vòng lặp tiếp theo
+        start += 500
+
+
+
 
 
 if __name__ == '__main__':
