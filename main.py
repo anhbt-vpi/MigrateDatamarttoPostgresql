@@ -22,7 +22,7 @@ def migrateDB():
     driver = '{ODBC Driver 18 for SQL Server}'
     params = 'Driver=' + driver + ';Server=' + server + ',1433;Database=' + database + ';Uid={' + username + '};Pwd={' + password + '};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;Authentication=ActiveDirectoryPassword'
 
-    db_name = 'large'
+    db_name = 'postgres'
     db_user = 'postgres'
     db_password = 'mac0901'
     db_host = 'host.docker.internal'
@@ -95,10 +95,11 @@ def writeData(engine_postgresql, engine_datamart, conn_datamart, conn_postgresql
         first_column_name = columns[0].name
         if remain < batch_read:
             batch_read = remain
-        # logging.debug(f"batch_read = {batch_read}")
-        # logging.debug(f"total_records = {total_records}")
-        # logging.debug(f"start = {start}")
-        # logging.debug(f"remain = {remain}")
+        logging.debug("")
+        logging.debug(f"batch_read = {batch_read}")
+        logging.debug(f"total_records = {total_records}")
+        logging.debug(f"start = {start}")
+        logging.debug(f"remain = {remain}")
         logging.debug("==================================START_READ==================================")
 
         select_query = table_from_another_database.select().order_by(first_column_name).offset(start).limit(batch_read)
